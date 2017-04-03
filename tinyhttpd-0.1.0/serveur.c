@@ -22,13 +22,13 @@
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <pthread.h>
+// #include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
 #define ISspace(x) isspace((int)(x))
 
-#define SERVER_STRING "Server: jdbhttpd/0.1.0\r\n"
+#define SERVER_STRING "Server: MyAdBlock\n"
 
 void accept_request(int);
 void bad_request(int);
@@ -330,7 +330,7 @@ int get_line(int sock, char *buf, int size)
    c = '\n';
  }
  buf[i] = '\0';
- 
+
  return(i);
 }
 
@@ -419,28 +419,28 @@ void serve_file(int client, const char *filename)
 /**********************************************************************/
 int startup(u_short *port)
 {
- int httpd = 0;
+ int serveur = 0;
  struct sockaddr_in name;
 
- httpd = socket(PF_INET, SOCK_STREAM, 0);
- if (httpd == -1)
+ serveur = socket(PF_INET, SOCK_STREAM, 0);
+ if ( serveur == -1)
   error_die("socket");
  memset(&name, 0, sizeof(name));
  name.sin_family = AF_INET;
  name.sin_port = htons(*port);
  name.sin_addr.s_addr = htonl(INADDR_ANY);
- if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0)
+ if (bind(serveur, (struct sockaddr *)&name, sizeof(name)) < 0)
   error_die("bind");
  if (*port == 0)  /* if dynamically allocating a port */
  {
   int namelen = sizeof(name);
-  if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
+  if (getsockname(serveur, (struct sockaddr *)&name, &namelen) == -1)
    error_die("getsockname");
   *port = ntohs(name.sin_port);
  }
- if (listen(httpd, 5) < 0)
+ if (listen(serveur, 5) < 0)
   error_die("listen");
- return(httpd);
+ return(serveur);
 }
 
 /**********************************************************************/
@@ -479,10 +479,10 @@ int main(void)
  int client_sock = -1;
  struct sockaddr_in client_name;
  int client_name_len = sizeof(client_name);
- pthread_t newthread;
+ // pthread_t newthread;
 
  server_sock = startup(&port);
- printf("httpd running on port %d\n", port);
+ printf("serveur running on port %d\n", port);
 
  while (1)
  {
@@ -490,10 +490,13 @@ int main(void)
                        (struct sockaddr *)&client_name,
                        &client_name_len);
   if (client_sock == -1)
-   error_die("accept");
- /* accept_request(client_sock); */
- if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
+    error_die("accept");
+    accept_request(client_sock);
+
+  /**
+  if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
    perror("pthread_create");
+  */
  }
 
  close(server_sock);
