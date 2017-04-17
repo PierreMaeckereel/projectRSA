@@ -16,7 +16,7 @@ void error(char* msg){
 
 int main(int argc,char* argv[]){
   pid_t pid;
-  struct sockaddr_in addr_in,cli_addr,serv_addr;
+  struct sockaddr_in cli_addr,serv_addr;
   struct hostent* host;
   int sockfd,newsockfd;
 
