@@ -28,9 +28,12 @@ int pubsFiltre(char* tampon){
 
 int main(int argc, char** argv){
   pid_t pid;
-  struct sockaddr_in client_addr, server_addr;
+  struct sockaddr_in client_addr;
   int socketfd, newsocketfd;
-  struct hostent* hote;
+
+  struct addrinfo hints;
+  struct addrinfo *result, *rp;
+  int s;
 
   if(argc < 2){
     afficheErreur("Le proxy doit etre lancé avec un numero de port en parametre");
@@ -38,16 +41,33 @@ int main(int argc, char** argv){
 
   printf("\n*** MyAdsBlocker port n° %s ***\n",argv[1]);
 
-  bzero((char*)&server_addr,sizeof(server_addr));
-  bzero((char*)&client_addr,sizeof(client_addr));
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+  hints.ai_protocol = 0;
+  hints.ai_canonname = NULL;
+  hints.ai_addr = NULL;
+  hints.ai_next = NULL;
 
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(atoi(argv[1]));
-  server_addr.sin_family = AF_INET;
+  s = getaddrinfo(NULL, argv[1], &hints, &result);
+  if(s != 0){ afficheErreur("Erreur GetAddrInfo");}
 
-  socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if(socketfd < 0){ afficheErreur("Problème d'initialisation de la socket serveur");}
-  if(bind(socketfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){ afficheErreur("Erreur de liaison de la socket serveur");}
+  for(rp = result; rp != NULL; rp->ai_next){
+    socketfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+    if(socketfd == -1){
+      continue;
+    }
+    if(bind(socketfd, rp->ai_addr, rp->ai_addrlen) == 0){
+      break;
+    }
+  }
+
+  if(rp == NULL){
+    afficheErreur("Erreur de binding");
+  }
+  freeaddrinfo(result);
+
   listen(socketfd,50);
   int clientlenght = sizeof(client_addr);
 
@@ -58,11 +78,17 @@ int main(int argc, char** argv){
   pid = fork();
   if(pid == 0){
     struct sockaddr_in hote_addr;
-    int boolPort = 0, newsocketfdtrans, port, i, socketfdtrans, retoursend;
+    int boolPort = 0, i, socketfdtrans, retoursend;
     char split1[300], split2[300], split3[10], tampon[510];
     char* splittok = NULL;
+    char* port = NULL;
     int hey, pubsPresence;
     bzero((char*)tampon,500);
+
+    struct addrinfo hintscli;
+    struct addrinfo *rescli, *rpcli;
+    int scli;
+
     hey = recv(newsocketfd,tampon,500,0);
     if(hey < 0){ afficheErreur("erreur recv l.54");}
     sscanf(tampon,"%s %s %s",split1,split2,split3);
@@ -79,18 +105,17 @@ int main(int argc, char** argv){
       splittok = strtok(split2,"//");
       if(boolPort != 1){
         splittok = strtok(NULL,"/");
-        port = 80;
+        port = "80";
       }else{
         splittok = strtok(NULL,":");
       }
 
       sprintf(split2,"%s",splittok);
       printf("Hote : %s\n", split2);
-      hote = gethostbyname(split2);
 
       if(boolPort != 0){
         splittok = strtok(NULL,"/");
-        port = atoi(splittok);
+        port = splittok;
       }
 
       strcat(split1,"^]");
@@ -100,17 +125,28 @@ int main(int argc, char** argv){
         splittok = strtok(NULL,"^]");
       }
       printf("Chemin : %s\n",splittok);
-      printf("Port : %d\n",port);
+      printf("Port : %s\n",port);
 
-      bzero((char*)&hote_addr,sizeof(hote_addr));
-      bcopy((char*)hote->h_addr, (char*)&hote_addr.sin_addr.s_addr, hote->h_length);
-      hote_addr.sin_port = htons(port);
-      hote_addr.sin_family = AF_INET;
+      //Utilisation de getaddrinfo
+      memset(&hintscli, 0, sizeof(struct addrinfo));
+      hintscli.ai_family = AF_UNSPEC;
+      hintscli.ai_socktype = SOCK_STREAM;
+      hintscli.ai_flags = 0;
+      hintscli.ai_protocol = IPPROTO_TCP;
 
-      socketfdtrans = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-      newsocketfdtrans = connect(socketfdtrans, (struct sockaddr*)&hote_addr, sizeof(struct sockaddr));
+      scli = getaddrinfo(split2, port, &hintscli, &rescli);
+      if(scli != 0){ afficheErreur("Erreur getaddrinfo client");}
+
+      for(rpcli = rescli; rpcli != NULL; rpcli = rpcli->ai_next){
+        socketfdtrans = socket(rpcli->ai_family, rpcli->ai_socktype, rpcli->ai_protocol);
+        if(socketfdtrans == -1){ continue;}
+        if(connect(socketfdtrans, rpcli->ai_addr, rpcli->ai_addrlen) != -1){ break;}
+      }
+
+      if(rpcli == NULL){ afficheErreur("Erreur de connexion côté client");}
+      freeaddrinfo(rescli);
+
       sprintf(tampon,"\nConnected to %s  IP - %s\n",split2,inet_ntoa(hote_addr.sin_addr));
-      if(newsocketfdtrans < 0){ afficheErreur("Erreur de connexion au serveur distant");}
       printf("\n%s\n",tampon);
       bzero((char*)tampon,sizeof(tampon));
 
