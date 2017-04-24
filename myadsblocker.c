@@ -9,6 +9,8 @@
 #include<netdb.h>
 #include<errno.h>
 
+int TAILLE_MAX = 6000;
+
 void afficheErreur(char* message){
   perror(message);
   exit(1);
@@ -79,17 +81,17 @@ int main(int argc, char** argv){
   if(pid == 0){
     struct sockaddr_in hote_addr;
     int boolPort = 0, i, socketfdtrans, retoursend;
-    char split1[300], split2[300], split3[10], tampon[510];
+    char split1[300], split2[300], split3[10], tampon[TAILLE_MAX];
     char* splittok = NULL;
     char* port = NULL;
     int hey, pubsPresence;
-    bzero((char*)tampon,500);
+    bzero((char*)tampon,TAILLE_MAX);
 
     struct addrinfo hintscli;
     struct addrinfo *rescli, *rpcli;
     int scli;
 
-    hey = recv(newsocketfd,tampon,500,0);
+    hey = recv(newsocketfd,tampon,TAILLE_MAX,0);
     if(hey < 0){ afficheErreur("erreur recv l.54");}
     sscanf(tampon,"%s %s %s",split1,split2,split3);
 
@@ -166,8 +168,8 @@ int main(int argc, char** argv){
           afficheErreur("Erreur d'écriture dans la socket");
         }else{
           do{
-            bzero((char*)tampon,500);
-            retoursend = recv(socketfdtrans,tampon,500,0);
+            bzero((char*)tampon,TAILLE_MAX);
+            retoursend = recv(socketfdtrans,tampon,TAILLE_MAX,0);
             if(retoursend > 0){
               send(newsocketfd, tampon, retoursend, 0);
             }
