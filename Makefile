@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall
 # LDFLAGS= utils math
-EXEC=main
+EXEC=myAdBlock
 SRC= $(wildcard *.c)
 OBJ= $(SRC:.cpp=.o)
 
@@ -14,10 +14,11 @@ $(EXEC): $(OBJ)
 %.o: %.c %.h
 	$(CC) -o $@ -c $< $(CFLAGS)
 
-
+run: 
+	./myAdBlock 8080
 
 clean:
 	rm -rf *.o
 
-mrproper: clean
+rmproper: clean
 	rm -rf $(EXEC)
