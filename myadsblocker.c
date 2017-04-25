@@ -81,7 +81,7 @@ int main(int argc, char** argv){
   if(pid == 0){
     struct sockaddr_in hote_addr;
     int boolPort = 0, i, socketfdtrans, retoursend;
-    char split1[300], split2[300], split3[10], tampon[TAILLE_MAX];
+    char split1[300], split2[300], split3[10], tampon[TAILLE_MAX], request[TAILLE_MAX];
     char* splittok = NULL;
     char* port = NULL;
     int hey, pubsPresence;
@@ -94,8 +94,10 @@ int main(int argc, char** argv){
     hey = recv(newsocketfd,tampon,TAILLE_MAX,0);
     if(hey < 0){ afficheErreur("erreur recv l.54");}
     sscanf(tampon,"%s %s %s",split1,split2,split3);
+    sprintf(request,"%s",tampon);
 
     if(((strncmp(split1,"GET",3)==0))&&((strncmp(split3,"HTTP/1.1",8)==0)||(strncmp(split3,"HTTP/1.0",8)==0))&&(strncmp(split2,"http://",7)==0)){
+      printf("*********** HTTP REQUEST ***********\n");
       strcpy(split1,split2);
       for(i=7; i<strlen(split2); i++){
         if(split2[i] == ':'){
@@ -149,10 +151,11 @@ int main(int argc, char** argv){
       freeaddrinfo(rescli);
 
       sprintf(tampon,"\nConnected to %s  IP - %s\n",split2,inet_ntoa(hote_addr.sin_addr));
-      printf("\n%s\n",tampon);
+      //printf("\n%s\n",tampon);
       bzero((char*)tampon,sizeof(tampon));
 
       pubsPresence = 0;
+
 
       if(splittok != NULL){
         sprintf(tampon,"GET /%s %s\r\nHost: %s\r\nConnection: close\r\n\r\n",splittok,split3,split2);
@@ -161,9 +164,10 @@ int main(int argc, char** argv){
         sprintf(tampon,"GET / %s\r\nHost: %s\r\nConnection: close\r\n\r\n",split3,split2);
       }
 
+
       if(pubsPresence == 0){
         retoursend = send(socketfdtrans,tampon,strlen(tampon),0);
-        printf("\n%s\n",tampon);
+        //printf("\n%s\n",tampon);
         if(retoursend < 0){
           afficheErreur("Erreur d'écriture dans la socket");
         }else{
@@ -172,12 +176,92 @@ int main(int argc, char** argv){
             retoursend = recv(socketfdtrans,tampon,TAILLE_MAX,0);
             if(retoursend > 0){
               send(newsocketfd, tampon, retoursend, 0);
+            }else{
+              printf("%s\n",tampon);
             }
           }while(retoursend > 0);
         }
       }
     }else{
-      send(newsocketfd,"400 : BAD REQUEST\nONLY HTTP REQUESTS ALLOWED",18,0);
+      if(strncmp(split1,"CONNECT",7) == 0){
+        printf("*********** HTTPS REQUEST ***********\n");
+        char request[500] = "";
+        sprintf(request,"%s",tampon);
+        printf("%s %s %s\n",split1,split2,split3);
+        char connexion[200], hote[300];
+        sprintf(connexion,"HTTP/1.0 200 Connection established\r\n\r\n");
+        strcpy(split1,split2);
+
+        for(i=7; i<strlen(split2); i++){
+          if(split2[i] == ':'){
+            boolPort = 1;
+            break;
+          }
+        }
+
+        if(boolPort != 1){
+          port = "443";
+        }else{
+          splittok = strtok(split2,":");
+        }
+        sprintf(hote,"%s",splittok);
+        printf("Hote : %s\n", hote);
+
+        if(boolPort == 1){
+          strcat(split1,"^]");
+          splittok = strtok(split1,":");
+          splittok = strtok(NULL,"^]");
+          printf("%s\n",splittok);
+          port = splittok;
+        }
+        printf("Port : %s\n", port);
+        //Utilisation de getaddrinfo
+
+        memset(&hintscli, 0, sizeof(struct addrinfo));
+        hintscli.ai_family = AF_UNSPEC;
+        hintscli.ai_socktype = SOCK_STREAM;
+        hintscli.ai_flags = 0;
+        hintscli.ai_protocol = IPPROTO_TCP;
+
+        scli = getaddrinfo(hote, port, &hintscli, &rescli);
+        if(scli != 0){ afficheErreur("Erreur getaddrinfo client");}
+
+        for(rpcli = rescli; rpcli != NULL; rpcli = rpcli->ai_next){
+          socketfdtrans = socket(rpcli->ai_family, rpcli->ai_socktype, rpcli->ai_protocol);
+          if(socketfdtrans == -1){ continue;}
+          if(connect(socketfdtrans, rpcli->ai_addr, rpcli->ai_addrlen) != -1){ break;}
+        }
+
+        if(rpcli == NULL){ afficheErreur("Erreur de connexion côté client");}
+        freeaddrinfo(rescli);
+        /*
+        if(send(newsocketfd, connexion, strlen(connexion), 0) < 0){
+          afficheErreur("Erreur message connexion client : ");
+        }*/
+
+        pubsPresence = 0;
+
+        printf("Avant envoie données\n");
+        if(pubsPresence == 0){
+          retoursend = send(socketfdtrans,request,strlen(request),0);
+          if(retoursend < 0){
+            afficheErreur("Erreur d'écriture dans la socket");
+          }else{
+            do{
+              bzero((char*)tampon,TAILLE_MAX);
+              retoursend = recv(socketfdtrans,tampon,TAILLE_MAX,0);
+              printf("==> %s\n",tampon);
+              if(retoursend > 0){
+                send(newsocketfd, tampon, retoursend, 0);
+              }else{
+                printf("---> %s\n",tampon);
+              }
+            }while(retoursend > 0);
+          }
+        }
+      }else{
+        send(newsocketfd,"400 : BAD REQUEST\nONLY HTTP/HTTPS REQUESTS ALLOWED",18,0);
+      }
     }
     close(socketfdtrans);
     close(newsocketfd);
